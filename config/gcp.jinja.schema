@@ -1,0 +1,20 @@
+info:
+  title: CI template
+  author: Julien Maitrehenry
+  description: Create a cluster of jenkins agent
+  version: 1.0
+
+required:
+  - targetSize
+  - buildName
+  - buildId
+
+properties:
+  targetSize:
+    type: integer
+  buildName:
+    type: string
+  buildId:
+    type: integer
+  jenkinsAccount:
+    type: string

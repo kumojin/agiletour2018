@@ -1,0 +1,76 @@
+resources:
+- name: {{properties['buildName']}}-tpl
+  properties:
+    description: ''
+    properties:
+      disks:
+      - autoDelete: true
+        boot: true
+        deviceName: boot
+        initializeParams:
+          diskSizeGb: 20
+          sourceImage: projects/coreos-cloud/global/images/family/coreos-stable
+        mode: READ_WRITE
+        type: PERSISTENT
+      machineType: custom-1-1024
+      networkInterfaces:
+      - accessConfigs:
+        - name: external-nat
+          type: ONE_TO_ONE_NAT
+        network: global/networks/default
+      metadata:
+        items:
+        - key: user-data
+          value: |
+             #cloud-config
+             write_files:
+               - path: /tmp/startup.sh
+                 permissions: 0755
+                 content: |
+                     #!/bin/bash
+                     sleep 10
+                     export SLAVE_NAME="{{properties['buildName']}}-`/usr/bin/hostname`"
+                     systemctl stop update-engine
+                     chmod 777 /var/run/docker.sock
+                     mkdir /ci/jenkins
+                     chmod 777 /ci/jenkins
+                     sleep 10
+                     docker pull jmaitrehenry/docker-jenkins-jnlp
+                     docker run -d -v /var/run/docker.sock:/var/run/docker.sock \
+                         -e JENKINS_URL="http://35.184.160.4" \
+                         -e LABELS={{properties['buildName']}} \
+                         -e USER={{properties['jenkinsAccount']}} \
+                         -e JENKINS_AGENT_NAME=$SLAVE_NAME \
+                         -e EXECUTORS=1 \
+                         -v /ci/jenkins:/ci/jenkins \
+                         jmaitrehenry/docker-jenkins-jnlp
+               - path: /ci/jenkins/gcloud/configurations/config_default
+                 content: |
+                   [core]
+                   account = julien@kumojin.com
+                   project = agilequebec
+
+                   [compute]
+                   zone = us-east1-d
+                   region = us-east1
+             coreos:
+                update:
+                  reboot-strategy: "off"
+                units:
+                  - name: "jenkins-startup.service"
+                    command: "start"
+                    content: |
+                      [Unit]
+                      Description=Jenkins container
+                      Author=Me
+                      After=docker.service
+                      [Service]
+                      ExecStart=/tmp/startup.sh
+  type: compute.v1.instanceTemplate
+- name: {{properties['buildName']}}-igm
+  type: compute.v1.instanceGroupManager
+  properties:
+    baseInstanceName: {{properties['buildName']}}-igm
+    instanceTemplate: $(ref.{{properties['buildName']}}-tpl.selfLink)
+    targetSize: {{properties['targetSize']}}
+    zone: us-east1-c
